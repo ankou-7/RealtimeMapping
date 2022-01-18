@@ -59,4 +59,14 @@ typedef struct {
     matrix_float4x4 modelMatrix;
 } InstanceUniforms;
 
+//MARK: - 追加
+struct AnchorUniforms {
+    matrix_float4x4 transform;
+    matrix_float4x4 viewProjectionMatrix;
+};
+
+struct vertexUniforms {
+    simd_float3 position;
+};
+
 #endif /* ShaderTypes_h */

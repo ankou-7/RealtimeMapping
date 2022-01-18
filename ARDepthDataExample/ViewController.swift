@@ -31,7 +31,7 @@ class ViewController: UIViewController, MTKViewDelegate, ARSessionDelegate {
         // Set the view to use the default device.
         if let view = self.view as? MTKView {
             view.device = MTLCreateSystemDefaultDevice()
-            view.backgroundColor = UIColor.clear
+            view.backgroundColor = UIColor.clear //UIColor.blue
             view.delegate = self
             
             guard view.device != nil else {
@@ -53,6 +53,10 @@ class ViewController: UIViewController, MTKViewDelegate, ARSessionDelegate {
         
         // Enable the smoothed scene depth frame-semantic.
         configuration.frameSemantics = .smoothedSceneDepth
+        
+        if ARWorldTrackingConfiguration.supportsSceneReconstruction(.mesh) {
+            configuration.sceneReconstruction = .mesh//WithClassification
+        }
 
         // Run the view's session.
         session.run(configuration)
@@ -97,6 +101,22 @@ class ViewController: UIViewController, MTKViewDelegate, ARSessionDelegate {
             self.present(alertController, animated: true, completion: nil)
         }
     }
+    
+    var IDFlag = false
+    
+    func session(_ session: ARSession, didAdd anchors: [ARAnchor]) {
+        for anchor in anchors {
+            if let meshAnchor = anchor as? ARMeshAnchor {
+                if IDFlag == false {
+                    renderer.ID = meshAnchor.identifier
+                    renderer.anchorID[meshAnchor.identifier] = renderer.anchorID.count
+                    renderer.perFaceCount.append(meshAnchor.geometry.faces.count)
+                    IDFlag = true
+                }
+            }
+        }
+    }
+                    
 
     // Auto-hide the home indicator to maximize immersion in AR experiences.
     override var prefersHomeIndicatorAutoHidden: Bool {
