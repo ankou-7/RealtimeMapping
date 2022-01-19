@@ -78,6 +78,8 @@ class Renderer {
     var anchorUniformsBuffer: MTLBuffer!
     var viewProjectionMatrix: float4x4!
     
+    private let relaxedStencilState: MTLDepthStencilState
+    
     var anchorID = Dictionary<UUID, Int>() //ARMeshAnchorのidと追加番号
     var perFaceCount: [Int] = []
     var pre_vertexUniformsBuffer: MetalBuffer<vertexUniforms>!
@@ -90,6 +92,8 @@ class Renderer {
         self.renderDestination = renderDestination
         
         vertexUniformsBuffer = .init(device: device, count: 99_999_999, index: 8)
+        let relaxedStateDescriptor = MTLDepthStencilDescriptor()
+        relaxedStencilState = device.makeDepthStencilState(descriptor: relaxedStateDescriptor)!
         
         // Perform one-time setup of the Metal objects.
         loadMetal()
@@ -138,7 +142,8 @@ class Renderer {
                     
                     if meshFlag == true {
                         drawMesh(renderEncoder: fogRenderEncoding)
-                        //calcuVertex(renderEncoder: fogRenderEncoding)
+                        
+                        calcuVertex(renderEncoder: fogRenderEncoding)
                     }
 
                     // Finish encoding commands.
@@ -397,7 +402,7 @@ class Renderer {
         renderEncoder.pushDebugGroup("MeshPass")
 
         // Set render command encoder state.
-        renderEncoder.setCullMode(.none)
+        renderEncoder.setCullMode(.none) //向き付け
         renderEncoder.setRenderPipelineState(meshPipelineState)
 
         renderEncoder.setVertexBuffer(anchor.geometry.vertices.buffer, offset: 0, index: 0)
@@ -435,18 +440,22 @@ class Renderer {
         renderEncoder.pushDebugGroup("CalcuPass")
         
         renderEncoder.setCullMode(.none)
+        renderEncoder.setDepthStencilState(relaxedStencilState)
         renderEncoder.setRenderPipelineState(calcuPipelineState)
         
         renderEncoder.setVertexBuffer(anchor.geometry.vertices.buffer, offset: 0, index: 0)
         renderEncoder.setVertexBuffer(anchor.geometry.faces.buffer, offset: 0, index: 1)
         
-        pre_vertexUniformsBuffer = .init(device: device, count: anchor.geometry.faces.count, index: 2)
+        pre_vertexUniformsBuffer = .init(device: device, count: anchor.geometry.faces.count * 3, index: 2)
         renderEncoder.setVertexBuffer(pre_vertexUniformsBuffer) //index = 2
+        
+//        let tryBuffer = device.makeBuffer(length: MemoryLayout<SIMD3<Float>>.stride * anchor.geometry.faces.count * 3, options: [])
+//        renderEncoder.setVertexBuffer(tryBuffer, offset: 0, index: 6)
         
         renderEncoder.drawPrimitives(type: .point, vertexStart: 0, vertexCount: anchor.geometry.faces.count * 3)
         renderEncoder.popDebugGroup()
         
-        print(pre_vertexUniformsBuffer)
+        print(pre_vertexUniformsBuffer[0])
     }
     
     // MARK: - MPS Filter
