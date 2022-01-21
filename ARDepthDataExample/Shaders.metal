@@ -137,6 +137,39 @@ vertex void CalcuVertex(uint id [[vertex_id]],
                             vertices[faces[id]*3 + 2]);
 }
 
+kernel void KernelVertex(uint id [[thread_position_in_grid]],
+                         constant float *vertices [[ buffer(0) ]],
+                         constant int *faces [[ buffer(1) ]],
+                         device float3 *pre_vertex [[ buffer(2) ]]
+                                ) {
+    
+    pre_vertex[id] = float3(vertices[faces[id]*3 + 0],
+                            vertices[faces[id]*3 + 1],
+                            vertices[faces[id]*3 + 2]);
+}
+
+kernel void UpdateKernelVertex(uint id [[thread_position_in_grid]],
+                               constant float *vertices [[ buffer(0) ]],
+                               constant int *faces [[ buffer(1) ]],
+                               device float3 *pre_vertex [[ buffer(2) ]],
+                               device float3 *new_vertex [[ buffer(3) ]],
+                               constant CalcuUniforms &calcu [[ buffer(4) ]]
+                                      ) {
+          
+          if (id < uint(calcu.left_sum)) {
+              new_vertex[id] = pre_vertex[id];
+          }
+          else if (id >= uint(calcu.left_sum) && id < uint(calcu.left_sum + calcu.new_count)) {
+              new_vertex[id] = float3(vertices[faces[id - calcu.left_sum]*3 + 0],
+                                      vertices[faces[id - calcu.left_sum]*3 + 1],
+                                      vertices[faces[id - calcu.left_sum]*3 + 2]);
+          }
+          else if (id >= uint(calcu.left_sum + calcu.new_count)) {
+              new_vertex[id] = pre_vertex[id - (calcu.new_count - calcu.pre_count)];
+          }
+          
+      }
+
 
 struct MeshVertexOut {
     float4 position [[position]]; //特徴点の３次元座標
@@ -157,19 +190,8 @@ static simd_float3 mul(simd_float3 vertexPoint, matrix_float4x4 matrix) {
 vertex MeshVertexOut MeshVertex(uint id [[vertex_id]],
                                 constant float *vertices [[ buffer(0) ]],
                                 constant int *faces [[ buffer(1) ]],
-                                constant AnchorUniforms &anchorUnifoms [[ buffer(2) ]],
-                                constant int *a [[ buffer(5) ]],
-                                device int *trys [[ buffer(6) ]]
+                                constant AnchorUniforms &anchorUnifoms [[ buffer(2) ]]
                                 ) {
-    
-    trys[0] = 1;//a[0];
-    trys[1] = 2;//a[1];
-    trys[2] = 3;//a[2];
-    trys[3] = a[3];
-    trys[4] = a[4];
-    trys[5] = a[5];
-    trys[6] = a[6];
-    
     const auto position = mul(float3(vertices[faces[id]*3 + 0],
                                      vertices[faces[id]*3 + 1],
                                      vertices[faces[id]*3 + 2]),

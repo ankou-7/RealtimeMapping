@@ -69,4 +69,10 @@ struct vertexUniforms {
     simd_float3 position;
 };
 
+struct CalcuUniforms {
+    int pre_count;
+    int new_count;
+    int left_sum;
+};
+
 #endif /* ShaderTypes_h */

@@ -329,7 +329,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CODE_SIGN_STYLE = Automatic;
-				DEVELOPMENT_TEAM = 424LNK92VG;
+				DEVELOPMENT_TEAM = 495AYJWTT2;
 				INFOPLIST_FILE = ARDepthDataExample/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -337,7 +337,7 @@
 					"@executable_path/Frameworks",
 				);
 				PRIVATE_HEADERS_FOLDER_PATH = "";
-				PRODUCT_BUNDLE_IDENTIFIER = "com.example.apple-samplecode.ARDepthDataExample${SAMPLE_CODE_DISAMBIGUATOR}";
+				PRODUCT_BUNDLE_IDENTIFIER = "com.example.apple-samplecode.ARDepthDataExample424LNK92VG.yasue";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
 				SDKROOT = iphoneos;
@@ -354,7 +354,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CODE_SIGN_STYLE = Automatic;
-				DEVELOPMENT_TEAM = 424LNK92VG;
+				DEVELOPMENT_TEAM = 495AYJWTT2;
 				INFOPLIST_FILE = ARDepthDataExample/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -362,7 +362,7 @@
 					"@executable_path/Frameworks",
 				);
 				PRIVATE_HEADERS_FOLDER_PATH = "";
-				PRODUCT_BUNDLE_IDENTIFIER = "com.example.apple-samplecode.ARDepthDataExample${SAMPLE_CODE_DISAMBIGUATOR}";
+				PRODUCT_BUNDLE_IDENTIFIER = "com.example.apple-samplecode.ARDepthDataExample424LNK92VG.yasue";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
 				SDKROOT = iphoneos;

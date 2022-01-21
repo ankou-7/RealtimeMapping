@@ -108,11 +108,25 @@ class ViewController: UIViewController, MTKViewDelegate, ARSessionDelegate {
         for anchor in anchors {
             if let meshAnchor = anchor as? ARMeshAnchor {
                 if IDFlag == false {
-                    renderer.ID = meshAnchor.identifier
-                    renderer.anchorID[meshAnchor.identifier] = renderer.anchorID.count
-                    renderer.perFaceCount.append(meshAnchor.geometry.faces.count)
-                    IDFlag = true
+                    print("didAdd")
+                    if renderer.anchorID.count < 2 {
+                        renderer.ID = meshAnchor.identifier
+                        renderer.anchorID[meshAnchor.identifier] = renderer.anchorID.count
+                        renderer.perFaceCount.append(meshAnchor.geometry.faces.count)
+                        if renderer.anchorID.count > 0 {
+                           renderer.perFaceIndex.append(renderer.perFaceIndex[renderer.anchorID.count - 1] + renderer.perFaceCount[renderer.anchorID.count - 1])
+                        }
+                    }
+                    //IDFlag = true
                 }
+            }
+        }
+    }
+    
+    func session(_ session: ARSession, didUpdate anchors: [ARAnchor]) {
+        for anchor in anchors {
+            if let meshAnchor = anchor as? ARMeshAnchor {
+                renderer.ID = meshAnchor.identifier
             }
         }
     }
