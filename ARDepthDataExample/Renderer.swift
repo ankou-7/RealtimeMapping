@@ -33,6 +33,7 @@ class Renderer {
     let session: ARSession
     let device: MTLDevice
     let inFlightSemaphore = DispatchSemaphore(value: kMaxBuffersInFlight)
+    let Semaphore = DispatchSemaphore(value: kMaxBuffersInFlight)
     var renderDestination: RenderDestinationProvider
     
     // Metal objects.
@@ -76,23 +77,27 @@ class Renderer {
     var ID: UUID!
     var anchorNum : Int!
     
+    var meshAnchors = [ARMeshAnchor]()
+    //    var allmeshAnchors: [SIMD3<Float>] = []
+    //    var allmeshAnchorsBuffer: MTLBuffer!
+    
     var anchorUniforms: AnchorUniforms!
     var anchorUniformsBuffer: MTLBuffer!
     var viewProjectionMatrix: float4x4!
     
-    private let relaxedStencilState: MTLDepthStencilState
+//    private let relaxedStencilState: MTLDepthStencilState
     
-    var kernelPipeline: MTLComputePipelineState!
-    var update_kernelPipeline: MTLComputePipelineState!
+//    var kernelPipeline: MTLComputePipelineState!
+//    var update_kernelPipeline: MTLComputePipelineState!
     
-    var anchorID = Dictionary<UUID, Int>() //ARMeshAnchorのidと追加番号
-    var perFaceCount: [Int] = []
-    var perFaceIndex: [Int] = [0]
-    var sumCount: Int = 0
-    
-    var pre_vertexUniformsBuffer: MTLBuffer! //MetalBuffer<vertexUniforms>!
-    private var vertexUniformsBuffer: MTLBuffer! //MetalBuffer<vertexUniforms>
-    var calcuUniforms: MTLBuffer!
+//    var anchorID = Dictionary<UUID, Int>() //ARMeshAnchorのidと追加番号
+//    var perFaceCount: [Int] = []
+//    var perFaceIndex: [Int] = [0]
+//    var sumCount: Int = 0
+//
+//    var pre_vertexUniformsBuffer: MTLBuffer! //MetalBuffer<vertexUniforms>!
+//    private var vertexUniformsBuffer: MTLBuffer! //MetalBuffer<vertexUniforms>
+//    var calcuUniforms: MTLBuffer!
     
     // Initialize a renderer by setting up the AR session, GPU, and screen backing-store.
     init(session: ARSession, metalDevice device: MTLDevice, renderDestination: RenderDestinationProvider) {
@@ -100,9 +105,9 @@ class Renderer {
         self.device = device
         self.renderDestination = renderDestination
         
-        vertexUniformsBuffer = device.makeBuffer(length: MemoryLayout<SIMD3<Float>>.stride * 99_999_999, options: []) //.init(device: device, count: 99_999_999, index: 8)
-        let relaxedStateDescriptor = MTLDepthStencilDescriptor()
-        relaxedStencilState = device.makeDepthStencilState(descriptor: relaxedStateDescriptor)!
+//        vertexUniformsBuffer = device.makeBuffer(length: MemoryLayout<SIMD3<Float>>.stride * 99_999_999, options: []) //.init(device: device, count: 99_999_999, index: 8)
+//        let relaxedStateDescriptor = MTLDepthStencilDescriptor()
+//        relaxedStencilState = device.makeDepthStencilState(descriptor: relaxedStateDescriptor)!
         
         // Perform one-time setup of the Metal objects.
         loadMetal()
@@ -136,13 +141,7 @@ class Renderer {
             //meshAnchorも更新
             updateAppState()
             
-            applyGaussianBlur(commandBuffer: commandBuffer)
-            
-            if meshFlag == true {
-                //kernelVertex()
-                update_kernelVertex()
-            }
-            
+            //applyGaussianBlur(commandBuffer: commandBuffer)
             
             // Pass the depth and confidence pixel buffers to the GPU to shade-in the fog.
             if let renderPassDescriptor = renderDestination.currentRenderPassDescriptor,
@@ -157,9 +156,9 @@ class Renderer {
                     doFogRenderPass(renderEncoder: fogRenderEncoding)
                     
                     if meshFlag == true {
-                        drawMesh(renderEncoder: fogRenderEncoding)
+                        drawMesh2(renderEncoder: fogRenderEncoding, commandBuffer: commandBuffer)
                         
-                        //calcuVertex(renderEncoder: fogRenderEncoding)
+                        //drawMesh3(renderEncoder: fogRenderEncoding, commandBuffer: commandBuffer)
                     }
                     
                     // Finish encoding commands.
@@ -247,29 +246,29 @@ class Renderer {
             print("Failed to create mesh pipeline state, error \(error)")
         }
         
-        let calcuVertexFunction = defaultLibrary.makeFunction(name: "CalcuVertex")!
-        let calcuPipelineStateDescriptor = MTLRenderPipelineDescriptor()
-        calcuPipelineStateDescriptor.label = "MycalcuPipeline"
-        //calcuPipelineStateDescriptor.sampleCount = renderDestination.sampleCount
-        calcuPipelineStateDescriptor.vertexFunction = calcuVertexFunction
-        calcuPipelineStateDescriptor.isRasterizationEnabled = false
-        //calcuPipelineStateDescriptor.vertexDescriptor = imagePlaneVertexDescriptor
-        calcuPipelineStateDescriptor.colorAttachments[0].pixelFormat = renderDestination.colorPixelFormat
-        do {
-            try calcuPipelineState = device.makeRenderPipelineState(descriptor: calcuPipelineStateDescriptor)
-        } catch let error {
-            print("Failed to create calcu pipeline state, error \(error)")
-        }
-        
         // Create the command queue for one frame of rendering work.
         commandQueue = device.makeCommandQueue()
         
-        //kernel設定
-        let function = defaultLibrary.makeFunction(name: "KernelVertex")!
-        kernelPipeline = try! device.makeComputePipelineState(function: function)
-        
-        let function2 = defaultLibrary.makeFunction(name: "UpdateKernelVertex")!
-        update_kernelPipeline = try! device.makeComputePipelineState(function: function2)
+//        let calcuVertexFunction = defaultLibrary.makeFunction(name: "CalcuVertex")!
+//        let calcuPipelineStateDescriptor = MTLRenderPipelineDescriptor()
+//        calcuPipelineStateDescriptor.label = "MycalcuPipeline"
+//        //calcuPipelineStateDescriptor.sampleCount = renderDestination.sampleCount
+//        calcuPipelineStateDescriptor.vertexFunction = calcuVertexFunction
+//        calcuPipelineStateDescriptor.isRasterizationEnabled = false
+//        //calcuPipelineStateDescriptor.vertexDescriptor = imagePlaneVertexDescriptor
+//        calcuPipelineStateDescriptor.colorAttachments[0].pixelFormat = renderDestination.colorPixelFormat
+//        do {
+//            try calcuPipelineState = device.makeRenderPipelineState(descriptor: calcuPipelineStateDescriptor)
+//        } catch let error {
+//            print("Failed to create calcu pipeline state, error \(error)")
+//        }
+//
+//        //kernel設定
+//        let function = defaultLibrary.makeFunction(name: "KernelVertex")!
+//        kernelPipeline = try! device.makeComputePipelineState(function: function)
+//
+//        let function2 = defaultLibrary.makeFunction(name: "UpdateKernelVertex")!
+//        update_kernelPipeline = try! device.makeComputePipelineState(function: function2)
     }
     
     // Updates any app state.
@@ -280,33 +279,23 @@ class Renderer {
             return
         }
         
-        //ARMeshAnchorを格納
-        let meshAnchors = currentFrame.anchors.compactMap { $0 as? ARMeshAnchor }
-        //print(meshAnchors)
-        if meshAnchors.count > 0 {
-            for meshanchor in meshAnchors {
-                if meshanchor.identifier == ID {
-                    if anchorID[ID] != nil {
-                        anchor = meshanchor
-                        anchorNum = anchorID[ID]!
-                        meshFlag = true
-                    } else {
-                        meshFlag = false
-                    }
-                }
-            }
-        }
+//        //ARMeshAnchorを格納
+//        meshAnchors = currentFrame.anchors.compactMap { $0 as? ARMeshAnchor }
+//        //print(meshAnchors)
+//        if meshAnchors.count > 0 {
+//            meshFlag = true
+//        }
         
-        let orientation = UIInterfaceOrientation.landscapeRight //portrait
-        let viewMatrix = currentFrame.camera.viewMatrix(for: orientation)
-        let projectionMatrix = currentFrame.camera.projectionMatrix(for: orientation, viewportSize: viewportSize, zNear: 0.001, zFar: 0)
-        viewProjectionMatrix = projectionMatrix * viewMatrix
+//        let orientation = UIInterfaceOrientation.landscapeRight //portrait
+//        let viewMatrix = currentFrame.camera.viewMatrix(for: orientation)
+//        let projectionMatrix = currentFrame.camera.projectionMatrix(for: orientation, viewportSize: viewportSize, zNear: 0.001, zFar: 0)
+//        viewProjectionMatrix = projectionMatrix * viewMatrix
         
         // Prepare the current frame's camera image for transfer to the GPU.
         updateCameraImageTextures(frame: currentFrame)
         
-        // Prepare the current frame's depth and confidence images for transfer to the GPU.
-        updateARDepthTexures(frame: currentFrame)
+//        // Prepare the current frame's depth and confidence images for transfer to the GPU.
+//        updateARDepthTexures(frame: currentFrame)
         
         // Update the destination-rendering vertex info if the size of the screen changed.
         if viewportSizeDidChange {
@@ -335,43 +324,43 @@ class Renderer {
         }
     }
     
-    // Prepares the scene depth information for transfer to the GPU for rendering.
-    func updateARDepthTexures(frame: ARFrame) {
-        // Get the scene depth or smoothed scene depth from the current frame.
-        guard let sceneDepth = frame.smoothedSceneDepth ?? frame.sceneDepth else {
-            print("Failed to acquire scene depth.")
-            return
-        }
-        var pixelBuffer: CVPixelBuffer!
-        pixelBuffer = sceneDepth.depthMap
-        
-        // Set up the destination pixel format for the depth information, and
-        // create a Metal texture from the depth image provided by ARKit.
-        var texturePixelFormat: MTLPixelFormat!
-        setMTLPixelFormat(&texturePixelFormat, basedOn: pixelBuffer)
-        depthTexture = createTexture(fromPixelBuffer: pixelBuffer, pixelFormat: texturePixelFormat, planeIndex: 0)
-        
-        // Get the current depth confidence values from the current frame.
-        // Set up the destination pixel format for the confidence information, and
-        // create a Metal texture from the confidence image provided by ARKit.
-        pixelBuffer = sceneDepth.confidenceMap
-        setMTLPixelFormat(&texturePixelFormat, basedOn: pixelBuffer)
-        confidenceTexture = createTexture(fromPixelBuffer: pixelBuffer, pixelFormat: texturePixelFormat, planeIndex: 0)
-    }
-    
+//    // Prepares the scene depth information for transfer to the GPU for rendering.
+//    func updateARDepthTexures(frame: ARFrame) {
+//        // Get the scene depth or smoothed scene depth from the current frame.
+//        guard let sceneDepth = frame.smoothedSceneDepth ?? frame.sceneDepth else {
+//            print("Failed to acquire scene depth.")
+//            return
+//        }
+//        var pixelBuffer: CVPixelBuffer!
+//        pixelBuffer = sceneDepth.depthMap
+//
+//        // Set up the destination pixel format for the depth information, and
+//        // create a Metal texture from the depth image provided by ARKit.
+//        var texturePixelFormat: MTLPixelFormat!
+//        setMTLPixelFormat(&texturePixelFormat, basedOn: pixelBuffer)
+//        depthTexture = createTexture(fromPixelBuffer: pixelBuffer, pixelFormat: texturePixelFormat, planeIndex: 0)
+//
+//        // Get the current depth confidence values from the current frame.
+//        // Set up the destination pixel format for the confidence information, and
+//        // create a Metal texture from the confidence image provided by ARKit.
+//        pixelBuffer = sceneDepth.confidenceMap
+//        setMTLPixelFormat(&texturePixelFormat, basedOn: pixelBuffer)
+//        confidenceTexture = createTexture(fromPixelBuffer: pixelBuffer, pixelFormat: texturePixelFormat, planeIndex: 0)
+//    }
+
     // Creates a Metal texture with the argument pixel format from a CVPixelBuffer at the argument plane index.
     func createTexture(fromPixelBuffer pixelBuffer: CVPixelBuffer, pixelFormat: MTLPixelFormat, planeIndex: Int) -> CVMetalTexture? {
         let width = CVPixelBufferGetWidthOfPlane(pixelBuffer, planeIndex)
         let height = CVPixelBufferGetHeightOfPlane(pixelBuffer, planeIndex)
-        
+
         var texture: CVMetalTexture? = nil
         let status = CVMetalTextureCacheCreateTextureFromImage(nil, cameraImageTextureCache, pixelBuffer, nil, pixelFormat,
                                                                width, height, planeIndex, &texture)
-        
+
         if status != kCVReturnSuccess {
             texture = nil
         }
-        
+
         return texture
     }
     
@@ -394,16 +383,18 @@ class Renderer {
     
     // Schedules the camera image and fog to be rendered on the GPU.
     func doFogRenderPass(renderEncoder: MTLRenderCommandEncoder) {
-        guard let cameraImageY = cameraImageTextureY, let cameraImageCbCr = cameraImageTextureCbCr,
-              let confidenceTexture = confidenceTexture else {
-                  return
-              }
+        guard let cameraImageY = cameraImageTextureY,
+              let cameraImageCbCr = cameraImageTextureCbCr
+                //let confidenceTexture = confidenceTexture
+        else {
+            return
+        }
         
         // Push a debug group that enables you to identify this render pass in a Metal frame capture.
-        renderEncoder.pushDebugGroup("FogPass")
+        //renderEncoder.pushDebugGroup("FogPass")
         
         // Set render command encoder state.
-        renderEncoder.setCullMode(.none)
+        //renderEncoder.setCullMode(.none)
         renderEncoder.setRenderPipelineState(fogPipelineState)
         
         // Setup plane vertex buffers.
@@ -413,194 +404,305 @@ class Renderer {
         // Setup textures for the fog fragment shader.
         renderEncoder.setFragmentTexture(CVMetalTextureGetTexture(cameraImageY), index: 0)
         renderEncoder.setFragmentTexture(CVMetalTextureGetTexture(cameraImageCbCr), index: 1)
-        renderEncoder.setFragmentTexture(filteredDepthTexture, index: 2)
-        renderEncoder.setFragmentTexture(CVMetalTextureGetTexture(confidenceTexture), index: 3)
+//        renderEncoder.setFragmentTexture(filteredDepthTexture, index: 2)
+//        renderEncoder.setFragmentTexture(CVMetalTextureGetTexture(confidenceTexture), index: 3)
         // Draw final quad to display
         renderEncoder.drawPrimitives(type: .triangleStrip, vertexStart: 0, vertexCount: 4)
-        renderEncoder.popDebugGroup()
+        //renderEncoder.popDebugGroup()
     }
     
-    func drawMesh(renderEncoder: MTLRenderCommandEncoder) {
+    var count = 0
+    
+    func drawMesh2(renderEncoder: MTLRenderCommandEncoder, commandBuffer: MTLCommandBuffer) {
         guard let cameraImageY = cameraImageTextureY,
               let cameraImageCbCr = cameraImageTextureCbCr
         else {
             return
         }
         
-        renderEncoder.pushDebugGroup("MeshPass")
+        guard let currentFrame = session.currentFrame else {
+            return
+        }
         
-        // Set render command encoder state.
-        renderEncoder.setCullMode(.none) //向き付け
-        renderEncoder.setRenderPipelineState(meshPipelineState)
-        
-        renderEncoder.setVertexBuffer(anchor.geometry.vertices.buffer, offset: 0, index: 0)
-        renderEncoder.setVertexBuffer(anchor.geometry.faces.buffer, offset: 0, index: 1)
-        
-        let entity: AnchorUniforms = AnchorUniforms(transform: anchor.transform, viewProjectionMatrix: viewProjectionMatrix)
-        anchorUniforms = entity
-        anchorUniformsBuffer = device.makeBuffer(bytes: [anchorUniforms], length: MemoryLayout<AnchorUniforms>.size, options: [])
-        renderEncoder.setVertexBuffer(anchorUniformsBuffer, offset: 0, index: 2)
-        
-        renderEncoder.setFragmentTexture(CVMetalTextureGetTexture(cameraImageY), index: 3)
-        renderEncoder.setFragmentTexture(CVMetalTextureGetTexture(cameraImageCbCr), index: 4)
-        
-        renderEncoder.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: anchor.geometry.faces.count * 3)
-        renderEncoder.popDebugGroup()
-    }
-    
-    func calcuVertex(renderEncoder: MTLRenderCommandEncoder) {
-        
-        renderEncoder.pushDebugGroup("CalcuPass")
-        
-        renderEncoder.setCullMode(.none)
-        renderEncoder.setDepthStencilState(relaxedStencilState)
-        renderEncoder.setRenderPipelineState(calcuPipelineState)
-        
-        renderEncoder.setVertexBuffer(anchor.geometry.vertices.buffer, offset: 0, index: 0)
-        renderEncoder.setVertexBuffer(anchor.geometry.faces.buffer, offset: 0, index: 1)
-        
-        pre_vertexUniformsBuffer = device.makeBuffer(length: MemoryLayout<SIMD3<Float>>.stride * anchor.geometry.faces.count * 3, options: []) //.init(device: device, count: anchor.geometry.faces.count * 3, index: 2)
-        renderEncoder.setVertexBuffer(pre_vertexUniformsBuffer, offset: 0, index: 2) //index = 2
-        
-        //        let tryBuffer = device.makeBuffer(length: MemoryLayout<SIMD3<Float>>.stride * anchor.geometry.faces.count * 3, options: [])
-        //        renderEncoder.setVertexBuffer(tryBuffer, offset: 0, index: 6)
-        
-        renderEncoder.drawPrimitives(type: .point, vertexStart: 0, vertexCount: anchor.geometry.faces.count * 3)
-        renderEncoder.popDebugGroup()
-        
-        
-        //print(pre_vertexUniformsBuffer[0])
-    }
-    
-    func kernelVertex() { //renderEncoder: MTLComputeCommandEncoder
-        
-        let commandBuffer = commandQueue.makeCommandBuffer()!
-        let renderEncoder = commandBuffer.makeComputeCommandEncoder()!
-        
-        renderEncoder.pushDebugGroup("CalcuPass")
-        
-        renderEncoder.setComputePipelineState(kernelPipeline)
-        
-        renderEncoder.setBuffer(anchor.geometry.vertices.buffer, offset: 0, index: 0)
-        renderEncoder.setBuffer(anchor.geometry.faces.buffer, offset: 0, index: 1)
-        
-        pre_vertexUniformsBuffer = device.makeBuffer(length: MemoryLayout<SIMD3<Float>>.stride * anchor.geometry.faces.count * 3, options: []) //.init(device: device, count: anchor.geometry.faces.count * 3, index: 2)
-        renderEncoder.setBuffer(pre_vertexUniformsBuffer, offset: 0, index: 2) //index = 2
-        
-        renderEncoder.setBuffer(vertexUniformsBuffer, offset: 0, index: 3)
-        
-        
-        sumCount += anchor.geometry.faces.count * 3
-        
-        let num = anchorID[ID]
-        let entity: CalcuUniforms = CalcuUniforms(pre_count: Int32(perFaceCount[num!]),
-                                                  new_count: Int32(anchor.geometry.faces.count * 3),
-                                                  left_sum: Int32(perFaceIndex[num!]))
-        renderEncoder.setBuffer(device.makeBuffer(bytes: [entity], length: MemoryLayout<CalcuUniforms>.size, options: []), offset: 0, index: 4)
-        
-        //        let tryBuffer = device.makeBuffer(length: MemoryLayout<SIMD3<Float>>.stride * anchor.geometry.faces.count * 3, options: [])
-        //        renderEncoder.setVertexBuffer(tryBuffer, offset: 0, index: 6)
-        
-        let width = 1//32
-        let threadsPerGroup = MTLSize(width: width, height: 1, depth: 1)
-        let numThreadgroups = MTLSize(width: (anchor.geometry.faces.count + width - 1) / width, height: 1, depth: 1)
-        renderEncoder.dispatchThreadgroups(numThreadgroups, threadsPerThreadgroup: threadsPerGroup)
-        
-        renderEncoder.endEncoding()
-        commandBuffer.commit()
-        commandBuffer.waitUntilCompleted()
-        renderEncoder.popDebugGroup()
-        
-//        let tryData = Data(bytesNoCopy: pre_vertexUniformsBuffer!.contents(), count: MemoryLayout<SIMD3<Float>>.stride * anchor.geometry.faces.count * 3, deallocator: .none)
-//        var trys = [SIMD3<Float>](repeating: SIMD3<Float>(0,0,0), count: anchor.geometry.faces.count * 3)
-//        trys = tryData.withUnsafeBytes {
-//            Array(UnsafeBufferPointer<SIMD3<Float>>(start: $0, count: tryData.count/MemoryLayout<SIMD3<Float>>.size))
-//        }
-//        print(trys)
-        //print(pre_vertexUniformsBuffer[0])
-    }
-    
-    func update_kernelVertex() {
-        let commandBuffer = commandQueue.makeCommandBuffer()!
-        let renderEncoder = commandBuffer.makeComputeCommandEncoder()!
-        
-        renderEncoder.pushDebugGroup("CalcuPass2")
-        
-        renderEncoder.setComputePipelineState(update_kernelPipeline)
-        
-        renderEncoder.setBuffer(anchor.geometry.vertices.buffer, offset: 0, index: 0)
-        renderEncoder.setBuffer(anchor.geometry.faces.buffer, offset: 0, index: 1)
-        
-        pre_vertexUniformsBuffer = device.makeBuffer(length: MemoryLayout<SIMD3<Float>>.stride * anchor.geometry.faces.count * 3, options: []) //.init(device: device, count: anchor.geometry.faces.count * 3, index: 2)
-        renderEncoder.setBuffer(pre_vertexUniformsBuffer, offset: 0, index: 2) //index = 2
-        
-        renderEncoder.setBuffer(vertexUniformsBuffer, offset: 0, index: 3)
-        
-        let num = anchorNum
-        print("num : \(num)")
-        let entity: CalcuUniforms = CalcuUniforms(pre_count: Int32(perFaceCount[num!]),
-                                                  new_count: Int32(anchor.geometry.faces.count * 3),
-                                                  left_sum: Int32(perFaceIndex[num!]))
-        renderEncoder.setBuffer(device.makeBuffer(bytes: [entity], length: MemoryLayout<CalcuUniforms>.size, options: []), offset: 0, index: 4)
-        
-        //sumCount += anchor.geometry.faces.count * 3 - perFaceCount[num!]
-        for i in num!+1...anchorID.count {
-            if i < perFaceIndex.count {
-                perFaceIndex[i] += (anchor.geometry.faces.count * 3 - perFaceCount[num!])
+        _ = Semaphore.wait(timeout: DispatchTime.distantFuture)
+        commandBuffer.addCompletedHandler { [weak self] commandBuffer in
+            if let self = self {
+                self.Semaphore.signal()
             }
         }
-        perFaceCount[num!] = anchor.geometry.faces.count * 3
-        sumCount = perFaceIndex.last!
-         
-        print("anchorID : \(anchorID)")
-        print("perFaceCount : \(perFaceCount)")
-        print("perFaceIndex : \(perFaceIndex)")
-        print("sumCount : \(sumCount)")
-         
-        //        let tryBuffer = device.makeBuffer(length: MemoryLayout<SIMD3<Float>>.stride * anchor.geometry.faces.count * 3, options: [])
-        //        renderEncoder.setVertexBuffer(tryBuffer, offset: 0, index: 6)
         
-        let width = 1//32
-        let threadsPerGroup = MTLSize(width: width, height: 1, depth: 1)
-        let numThreadgroups = MTLSize(width: (sumCount + width - 1) / width, height: 1, depth: 1)
-        renderEncoder.dispatchThreadgroups(numThreadgroups, threadsPerThreadgroup: threadsPerGroup)
+        //meshAnchors = currentFrame.anchors.compactMap { $0 as? ARMeshAnchor }
         
-        renderEncoder.endEncoding()
-        commandBuffer.commit()
-        commandBuffer.waitUntilCompleted()
-        renderEncoder.popDebugGroup()
+        let orientation = UIInterfaceOrientation.landscapeRight //portrait
+        let viewMatrix = currentFrame.camera.viewMatrix(for: orientation)
+        let projectionMatrix = currentFrame.camera.projectionMatrix(for: orientation, viewportSize: viewportSize, zNear: 0.001, zFar: 0)
+        viewProjectionMatrix = projectionMatrix * viewMatrix
+        
+//        count += 1
+//        print("draw\(count)")
+        
+        print("draw_count : \(meshAnchors.count)")
+        print("drawMesh : \(meshAnchors)")
+        for (i, mesh) in meshAnchors.enumerated() {
+            //if i < 2 {
+            //let mesh = meshAnchors[0]
+                //renderEncoder.pushDebugGroup("MeshPass")
+                
+                // Set render command encoder state.
+                //renderEncoder.setCullMode(.none) //向き付け
+                renderEncoder.setRenderPipelineState(meshPipelineState)
+                
+                renderEncoder.setVertexBuffer(mesh.geometry.vertices.buffer, offset: 0, index: 0)
+                renderEncoder.setVertexBuffer(mesh.geometry.faces.buffer, offset: 0, index: 1)
+                
+                anchorUniformsBuffer = device.makeBuffer(bytes: [AnchorUniforms(transform: mesh.transform,
+                                                                                viewProjectionMatrix: viewProjectionMatrix)],
+                                                         length: MemoryLayout<AnchorUniforms>.size, options: [])
+                renderEncoder.setVertexBuffer(anchorUniformsBuffer, offset: 0, index: 2)
+                
+                renderEncoder.setFragmentTexture(CVMetalTextureGetTexture(cameraImageY), index: 3)
+                renderEncoder.setFragmentTexture(CVMetalTextureGetTexture(cameraImageCbCr), index: 4)
+                
+                renderEncoder.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: mesh.geometry.faces.count * 3)
+                //renderEncoder.popDebugGroup()
+            //}
+        }
     }
+        
+    
+    func drawMesh3(renderEncoder: MTLRenderCommandEncoder, commandBuffer: MTLCommandBuffer) {
+        guard let currentFrame = session.currentFrame else {
+            return
+        }
+        
+        _ = Semaphore.wait(timeout: DispatchTime.distantFuture)
+        commandBuffer.addCompletedHandler { [weak self] commandBuffer in
+            if let self = self {
+                self.Semaphore.signal()
+            }
+        }
+        
+        meshAnchors = currentFrame.anchors.compactMap { $0 as? ARMeshAnchor }
+        
+        let orientation = UIInterfaceOrientation.landscapeRight //portrait
+        let viewMatrix = currentFrame.camera.viewMatrix(for: orientation)
+        let projectionMatrix = currentFrame.camera.projectionMatrix(for: orientation, viewportSize: viewportSize, zNear: 0.001, zFar: 0)
+        viewProjectionMatrix = projectionMatrix * viewMatrix
+        
+        //        count += 1
+        //        print("draw\(count)")
+        
+        for (i, mesh) in meshAnchors.enumerated() {
+            if i >= 2 && i <= 4 {
+                //let mesh = meshAnchors[0]
+                //renderEncoder.pushDebugGroup("MeshPass")
+                
+                // Set render command encoder state.
+                //renderEncoder.setCullMode(.none) //向き付け
+                renderEncoder.setRenderPipelineState(meshPipelineState)
+                
+                renderEncoder.setVertexBuffer(mesh.geometry.vertices.buffer, offset: 0, index: 0)
+                renderEncoder.setVertexBuffer(mesh.geometry.faces.buffer, offset: 0, index: 1)
+                
+                anchorUniformsBuffer = device.makeBuffer(bytes: [AnchorUniforms(transform: mesh.transform,
+                                                                                viewProjectionMatrix: viewProjectionMatrix)],
+                                                         length: MemoryLayout<AnchorUniforms>.size, options: [])
+                renderEncoder.setVertexBuffer(anchorUniformsBuffer, offset: 0, index: 2)
+                
+                //renderEncoder.setFragmentTexture(CVMetalTextureGetTexture(cameraImageY), index: 3)
+                //renderEncoder.setFragmentTexture(CVMetalTextureGetTexture(cameraImageCbCr), index: 4)
+                
+                renderEncoder.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: mesh.geometry.faces.count * 3)
+                //renderEncoder.popDebugGroup()
+            }
+        }
+        
+    }
+    
+//    func drawMesh(renderEncoder: MTLRenderCommandEncoder) {
+//        guard let cameraImageY = cameraImageTextureY,
+//              let cameraImageCbCr = cameraImageTextureCbCr
+//        else {
+//            return
+//        }
+//
+//        renderEncoder.pushDebugGroup("MeshPass")
+//
+//        // Set render command encoder state.
+//        renderEncoder.setCullMode(.none) //向き付け
+//        renderEncoder.setRenderPipelineState(meshPipelineState)
+//
+//        renderEncoder.setVertexBuffer(anchor.geometry.vertices.buffer, offset: 0, index: 0)
+//        renderEncoder.setVertexBuffer(anchor.geometry.faces.buffer, offset: 0, index: 1)
+//
+//        let entity: AnchorUniforms = AnchorUniforms(transform: anchor.transform, viewProjectionMatrix: viewProjectionMatrix)
+//        anchorUniforms = entity
+//        anchorUniformsBuffer = device.makeBuffer(bytes: [anchorUniforms], length: MemoryLayout<AnchorUniforms>.size, options: [])
+//        renderEncoder.setVertexBuffer(anchorUniformsBuffer, offset: 0, index: 2)
+//
+//        renderEncoder.setFragmentTexture(CVMetalTextureGetTexture(cameraImageY), index: 3)
+//        renderEncoder.setFragmentTexture(CVMetalTextureGetTexture(cameraImageCbCr), index: 4)
+//
+//        renderEncoder.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: anchor.geometry.faces.count * 3)
+//        renderEncoder.popDebugGroup()
+//    }
+    
+    
+//    func calcuVertex(renderEncoder: MTLRenderCommandEncoder) {
+//
+//        renderEncoder.pushDebugGroup("CalcuPass")
+//
+//        renderEncoder.setCullMode(.none)
+//        renderEncoder.setDepthStencilState(relaxedStencilState)
+//        renderEncoder.setRenderPipelineState(calcuPipelineState)
+//
+//        renderEncoder.setVertexBuffer(anchor.geometry.vertices.buffer, offset: 0, index: 0)
+//        renderEncoder.setVertexBuffer(anchor.geometry.faces.buffer, offset: 0, index: 1)
+//
+//        pre_vertexUniformsBuffer = device.makeBuffer(length: MemoryLayout<SIMD3<Float>>.stride * anchor.geometry.faces.count * 3, options: []) //.init(device: device, count: anchor.geometry.faces.count * 3, index: 2)
+//        renderEncoder.setVertexBuffer(pre_vertexUniformsBuffer, offset: 0, index: 2) //index = 2
+//
+//        //        let tryBuffer = device.makeBuffer(length: MemoryLayout<SIMD3<Float>>.stride * anchor.geometry.faces.count * 3, options: [])
+//        //        renderEncoder.setVertexBuffer(tryBuffer, offset: 0, index: 6)
+//
+//        renderEncoder.drawPrimitives(type: .point, vertexStart: 0, vertexCount: anchor.geometry.faces.count * 3)
+//        renderEncoder.popDebugGroup()
+//
+//
+//        //print(pre_vertexUniformsBuffer[0])
+//    }
+//
+//    func kernelVertex() { //renderEncoder: MTLComputeCommandEncoder
+//
+//        let commandBuffer = commandQueue.makeCommandBuffer()!
+//        let renderEncoder = commandBuffer.makeComputeCommandEncoder()!
+//
+//        renderEncoder.pushDebugGroup("CalcuPass")
+//
+//        renderEncoder.setComputePipelineState(kernelPipeline)
+//
+//        renderEncoder.setBuffer(anchor.geometry.vertices.buffer, offset: 0, index: 0)
+//        renderEncoder.setBuffer(anchor.geometry.faces.buffer, offset: 0, index: 1)
+//
+//        pre_vertexUniformsBuffer = device.makeBuffer(length: MemoryLayout<SIMD3<Float>>.stride * anchor.geometry.faces.count * 3, options: []) //.init(device: device, count: anchor.geometry.faces.count * 3, index: 2)
+//        renderEncoder.setBuffer(pre_vertexUniformsBuffer, offset: 0, index: 2) //index = 2
+//
+//        renderEncoder.setBuffer(vertexUniformsBuffer, offset: 0, index: 3)
+//
+//
+//        sumCount += anchor.geometry.faces.count * 3
+//
+//        let num = anchorID[ID]
+//        let entity: CalcuUniforms = CalcuUniforms(pre_count: Int32(perFaceCount[num!]),
+//                                                  new_count: Int32(anchor.geometry.faces.count * 3),
+//                                                  left_sum: Int32(perFaceIndex[num!]))
+//        renderEncoder.setBuffer(device.makeBuffer(bytes: [entity], length: MemoryLayout<CalcuUniforms>.size, options: []), offset: 0, index: 4)
+//
+//        //        let tryBuffer = device.makeBuffer(length: MemoryLayout<SIMD3<Float>>.stride * anchor.geometry.faces.count * 3, options: [])
+//        //        renderEncoder.setVertexBuffer(tryBuffer, offset: 0, index: 6)
+//
+//        let width = 1//32
+//        let threadsPerGroup = MTLSize(width: width, height: 1, depth: 1)
+//        let numThreadgroups = MTLSize(width: (anchor.geometry.faces.count + width - 1) / width, height: 1, depth: 1)
+//        renderEncoder.dispatchThreadgroups(numThreadgroups, threadsPerThreadgroup: threadsPerGroup)
+//
+//        renderEncoder.endEncoding()
+//        commandBuffer.commit()
+//        commandBuffer.waitUntilCompleted()
+//        renderEncoder.popDebugGroup()
+//
+////        let tryData = Data(bytesNoCopy: pre_vertexUniformsBuffer!.contents(), count: MemoryLayout<SIMD3<Float>>.stride * anchor.geometry.faces.count * 3, deallocator: .none)
+////        var trys = [SIMD3<Float>](repeating: SIMD3<Float>(0,0,0), count: anchor.geometry.faces.count * 3)
+////        trys = tryData.withUnsafeBytes {
+////            Array(UnsafeBufferPointer<SIMD3<Float>>(start: $0, count: tryData.count/MemoryLayout<SIMD3<Float>>.size))
+////        }
+////        print(trys)
+//        //print(pre_vertexUniformsBuffer[0])
+//    }
+//
+//    func update_kernelVertex() {
+//        let commandBuffer = commandQueue.makeCommandBuffer()!
+//        let renderEncoder = commandBuffer.makeComputeCommandEncoder()!
+//
+//        renderEncoder.pushDebugGroup("CalcuPass2")
+//
+//        renderEncoder.setComputePipelineState(update_kernelPipeline)
+//
+//        renderEncoder.setBuffer(anchor.geometry.vertices.buffer, offset: 0, index: 0)
+//        renderEncoder.setBuffer(anchor.geometry.faces.buffer, offset: 0, index: 1)
+//
+//        pre_vertexUniformsBuffer = device.makeBuffer(length: MemoryLayout<SIMD3<Float>>.stride * anchor.geometry.faces.count * 3, options: []) //.init(device: device, count: anchor.geometry.faces.count * 3, index: 2)
+//        renderEncoder.setBuffer(pre_vertexUniformsBuffer, offset: 0, index: 2) //index = 2
+//
+//        renderEncoder.setBuffer(vertexUniformsBuffer, offset: 0, index: 3)
+//
+//        let num = anchorNum
+//        print("num : \(num)")
+//        let entity: CalcuUniforms = CalcuUniforms(pre_count: Int32(perFaceCount[num!]),
+//                                                  new_count: Int32(anchor.geometry.faces.count * 3),
+//                                                  left_sum: Int32(perFaceIndex[num!]))
+//        renderEncoder.setBuffer(device.makeBuffer(bytes: [entity], length: MemoryLayout<CalcuUniforms>.size, options: []), offset: 0, index: 4)
+//
+//        //sumCount += anchor.geometry.faces.count * 3 - perFaceCount[num!]
+//        for i in num!+1...anchorID.count {
+//            if i < perFaceIndex.count {
+//                perFaceIndex[i] += (anchor.geometry.faces.count * 3 - perFaceCount[num!])
+//            }
+//        }
+//        perFaceCount[num!] = anchor.geometry.faces.count * 3
+//        sumCount = perFaceIndex.last!
+//
+//        print("anchorID : \(anchorID)")
+//        print("perFaceCount : \(perFaceCount)")
+//        print("perFaceIndex : \(perFaceIndex)")
+//        print("sumCount : \(sumCount)")
+//
+//        //        let tryBuffer = device.makeBuffer(length: MemoryLayout<SIMD3<Float>>.stride * anchor.geometry.faces.count * 3, options: [])
+//        //        renderEncoder.setVertexBuffer(tryBuffer, offset: 0, index: 6)
+//
+//        let width = 1//32
+//        let threadsPerGroup = MTLSize(width: width, height: 1, depth: 1)
+//        let numThreadgroups = MTLSize(width: (sumCount + width - 1) / width, height: 1, depth: 1)
+//        renderEncoder.dispatchThreadgroups(numThreadgroups, threadsPerThreadgroup: threadsPerGroup)
+//
+//        renderEncoder.endEncoding()
+//        commandBuffer.commit()
+//        commandBuffer.waitUntilCompleted()
+//        renderEncoder.popDebugGroup()
+//    }
     
     // MARK: - MPS Filter
     
-    // Sets up a filter to process the depth texture.
-    func setupFilter(width: Int, height: Int) {
-        // Create a destination backing-store to hold the blurred result.
-        let filteredDepthDescriptor = MTLTextureDescriptor()
-        filteredDepthDescriptor.pixelFormat = .r32Float
-        filteredDepthDescriptor.width = width
-        filteredDepthDescriptor.height = height
-        filteredDepthDescriptor.usage = [.shaderRead, .shaderWrite]
-        filteredDepthTexture = device.makeTexture(descriptor: filteredDepthDescriptor)
-        blurFilter = MPSImageGaussianBlur(device: device, sigma: 5)
-    }
+//    // Sets up a filter to process the depth texture.
+//    func setupFilter(width: Int, height: Int) {
+//        // Create a destination backing-store to hold the blurred result.
+//        let filteredDepthDescriptor = MTLTextureDescriptor()
+//        filteredDepthDescriptor.pixelFormat = .r32Float
+//        filteredDepthDescriptor.width = width
+//        filteredDepthDescriptor.height = height
+//        filteredDepthDescriptor.usage = [.shaderRead, .shaderWrite]
+//        filteredDepthTexture = device.makeTexture(descriptor: filteredDepthDescriptor)
+//        blurFilter = MPSImageGaussianBlur(device: device, sigma: 5)
+//    }
+//
+//    // Schedules the depth texture to be blurred on the GPU using the `blurFilter`.
+//    func applyGaussianBlur(commandBuffer: MTLCommandBuffer) {
+//        guard let arDepthTexture = depthTexture,
+//              let depthTexture = CVMetalTextureGetTexture(arDepthTexture)
+//        else {
+//            print("Error: Unable to apply the MPS filter.")
+//            return
+//        }
+//        //print("Able to apply the MPS filter.")
+//        guard let blur = blurFilter else {
+//            setupFilter(width: depthTexture.width, height: depthTexture.height)
+//            return
+//        }
+//
+//        let inputImage = MPSImage(texture: depthTexture, featureChannels: 1)
+//        let outputImage = MPSImage(texture: filteredDepthTexture, featureChannels: 1)
+//        blur.encode(commandBuffer: commandBuffer, sourceImage: inputImage, destinationImage: outputImage)
+//    }
     
-    // Schedules the depth texture to be blurred on the GPU using the `blurFilter`.
-    func applyGaussianBlur(commandBuffer: MTLCommandBuffer) {
-        guard let arDepthTexture = depthTexture,
-              let depthTexture = CVMetalTextureGetTexture(arDepthTexture)
-        else {
-            print("Error: Unable to apply the MPS filter.")
-            return
-        }
-        //print("Able to apply the MPS filter.")
-        guard let blur = blurFilter else {
-            setupFilter(width: depthTexture.width, height: depthTexture.height)
-            return
-        }
-        
-        let inputImage = MPSImage(texture: depthTexture, featureChannels: 1)
-        let outputImage = MPSImage(texture: filteredDepthTexture, featureChannels: 1)
-        blur.encode(commandBuffer: commandBuffer, sourceImage: inputImage, destinationImage: outputImage)
-    }
+    
 }

@@ -66,26 +66,26 @@ vertex FogColorInOut fogVertexTransform(const device FogVertex* cameraVertices [
 // Fog fragment function.
 fragment half4 fogFragmentShader(FogColorInOut in [[ stage_in ]],
                                  texture2d<float, access::sample> cameraImageTextureY [[ texture(0) ]],
-                                 texture2d<float, access::sample> cameraImageTextureCbCr [[ texture(1) ]],
-                                 depth2d<float, access::sample> arDepthTexture [[ texture(2) ]],
-                                 texture2d<uint> arDepthConfidence [[ texture(3) ]])
+                                 texture2d<float, access::sample> cameraImageTextureCbCr [[ texture(1) ]])
+                                 //depth2d<float, access::sample> arDepthTexture [[ texture(2) ]],
+                                 //texture2d<uint> arDepthConfidence [[ texture(3) ]])
 {
     // Whether to show the confidence debug visualization.
     // - Tag: ConfidenceVisualization
     // Set to `true` to visualize confidence.
-    bool confidenceDebugVisualizationEnabled = false;
+//    bool confidenceDebugVisualizationEnabled = false;
     
-    // Set the maximum fog saturation to 4.0 meters. Device maximum is 5.0 meters.
-    const float fogMax = 4.0;
+//    // Set the maximum fog saturation to 4.0 meters. Device maximum is 5.0 meters.
+//    const float fogMax = 4.0;
     
     // Fog is fully opaque, middle grey
     const half4 fogColor = half4(1.0, 0.0, 0.0, 1.0);
     
-    // Confidence debug visualization is red.
-    const half4 confidenceColor = half4(1.0, 0.0, 0.0, 1.0);
-    
-    // Maximum confidence is `ARConfidenceLevelHigh` = 2.
-    const uint maxConfidence = 2;
+//    // Confidence debug visualization is red.
+//    const half4 confidenceColor = half4(1.0, 0.0, 0.0, 1.0);
+//
+//    // Maximum confidence is `ARConfidenceLevelHigh` = 2.
+//    const uint maxConfidence = 2;
     
     // Create an object to sample textures.
     constexpr sampler s(address::clamp_to_edge, filter::linear);
@@ -97,31 +97,32 @@ fragment half4 fogFragmentShader(FogColorInOut in [[ stage_in ]],
     );
     half4 cameraColor = half4(rgb);
 
-    // Sample this pixel's depth value.
-    float depth = arDepthTexture.sample(s, in.texCoordCamera);
+//    // Sample this pixel's depth value.
+//    float depth = arDepthTexture.sample(s, in.texCoordCamera);
+//
+//    // Ignore depth values greater than the maximum fog distance.
+//    depth = clamp(depth, 0.0, fogMax);
     
-    // Ignore depth values greater than the maximum fog distance.
-    depth = clamp(depth, 0.0, fogMax);
-    
-    // Determine this fragment's percentage of fog.
-    float fogPercentage = depth / fogMax;
+//    // Determine this fragment's percentage of fog.
+//    float fogPercentage = depth / fogMax;
     
     // Mix the camera and fog colors based on the fog percentage.
     half4 foggedColor = mix(cameraColor, fogColor, 0.25);
+    return foggedColor;
     
-    // Just return the fogged color if confidence visualization is disabled.
-    if(!confidenceDebugVisualizationEnabled) {
-        return foggedColor;
-    } else {
-        // Sample the depth confidence.
-        uint confidence = arDepthConfidence.sample(s, in.texCoordCamera).x;
-        
-        // Assign a color percentage based on confidence.
-        float confidencePercentage = (float)confidence / (float)maxConfidence;
-
-        // Return the mixed confidence and foggedColor.
-        return mix(confidenceColor, foggedColor, confidencePercentage);
-    }
+//    // Just return the fogged color if confidence visualization is disabled.
+//    if(!confidenceDebugVisualizationEnabled) {
+//        return foggedColor;
+//    } else {
+//        // Sample the depth confidence.
+//        uint confidence = arDepthConfidence.sample(s, in.texCoordCamera).x;
+//
+//        // Assign a color percentage based on confidence.
+//        float confidencePercentage = (float)confidence / (float)maxConfidence;
+//
+//        // Return the mixed confidence and foggedColor.
+//        return mix(confidenceColor, foggedColor, confidencePercentage);
+//    }
 }
 
 
@@ -172,10 +173,10 @@ kernel void UpdateKernelVertex(uint id [[thread_position_in_grid]],
 
 
 struct MeshVertexOut {
+    float4 origin;
     float4 position [[position]]; //特徴点の３次元座標
-    float pointSize [[point_size]];
-    //float4 color; //特徴点の色情報
     float2 texCoord;
+    int visible;
 };
 //struct MeshFragmentOut {
 //    //float depth [[depth(any)]]; //深度情報
@@ -192,6 +193,7 @@ vertex MeshVertexOut MeshVertex(uint id [[vertex_id]],
                                 constant int *faces [[ buffer(1) ]],
                                 constant AnchorUniforms &anchorUnifoms [[ buffer(2) ]]
                                 ) {
+    
     const auto position = mul(float3(vertices[faces[id]*3 + 0],
                                      vertices[faces[id]*3 + 1],
                                      vertices[faces[id]*3 + 2]),
@@ -200,26 +202,43 @@ vertex MeshVertexOut MeshVertex(uint id [[vertex_id]],
     projectedPosition /= projectedPosition.w;
     
     const auto pt = float3((projectedPosition.x + 1) * (834 / 2),
-                                (-projectedPosition.y + 1) * (1150 / 2),
-                                (1 - (-projectedPosition.z + 1)));
+                           (-projectedPosition.y + 1) * (1194 / 2),
+                           (1 - (-projectedPosition.z + 1)));
     
     MeshVertexOut out;
-    out.position = projectedPosition;
-    out.pointSize = 10.0;
-    out.texCoord = float2(pt.x/834, pt.y/1150);
+    
+    if (abs(projectedPosition.x) >= 5.0 || abs(projectedPosition.y >= 5.0 || projectedPosition.z > 1.0)) {
+        out.visible = 1;
+    } else {
+        out.visible = 0;
+        out.origin = float4(position, 1.0);
+        out.position = projectedPosition;
+        out.texCoord = float2(pt.x/834, pt.y/1194);
+    }
+
+//    } else {
+//    if (pt.x >= 0 && pt.x <= 834 && pt.y >= 0 && pt.y <= 1150 && pt.z < 1.0) {
+//        out.origin = float4(position, 1.0);
+//        out.position = projectedPosition;
+//        out.texCoord = float2(pt.x/834, pt.y/1194);
+//    }
     
     return out;
 }
 
 fragment float4 MeshFragment(MeshVertexOut in [[stage_in]],
-                             texture2d<float, access::sample> cameraImageTextureY [[ texture(0) ]],
-                             texture2d<float, access::sample> cameraImageTextureCbCr [[ texture(1) ]]) {
+                             texture2d<float, access::sample> cameraImageTextureY [[ texture(3) ]],
+                             texture2d<float, access::sample> cameraImageTextureCbCr [[ texture(4) ]]) {
+        
+    if (in.visible == 1) {
+        discard_fragment();
+    }
+    
+    //discard_fragment();
     
     constexpr sampler s(address::clamp_to_edge, filter::linear);
-    float4 rgb = ycbcrToRGBTransform(
-                                     cameraImageTextureY.sample(s, in.texCoord),
-                                     cameraImageTextureCbCr.sample(s, in.texCoord)
-                                     );
+    float4 rgb = ycbcrToRGBTransform(cameraImageTextureY.sample(s, in.texCoord),
+                                     cameraImageTextureCbCr.sample(s, in.texCoord));
     
     return rgb;
 }

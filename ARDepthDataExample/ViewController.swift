@@ -39,6 +39,8 @@ class ViewController: UIViewController, MTKViewDelegate, ARSessionDelegate {
                 return
             }
             
+            print(view.bounds)
+            
             // Configure the renderer to draw to the view.
             renderer = Renderer(session: session, metalDevice: view.device!, renderDestination: view)
             
@@ -53,6 +55,8 @@ class ViewController: UIViewController, MTKViewDelegate, ARSessionDelegate {
         
         // Enable the smoothed scene depth frame-semantic.
         configuration.frameSemantics = .smoothedSceneDepth
+        
+        configuration.environmentTexturing = .none
         
         if ARWorldTrackingConfiguration.supportsSceneReconstruction(.mesh) {
             configuration.sceneReconstruction = .mesh//WithClassification
@@ -102,33 +106,31 @@ class ViewController: UIViewController, MTKViewDelegate, ARSessionDelegate {
         }
     }
     
-    var IDFlag = false
+    //var IDFlag = false
     
     func session(_ session: ARSession, didAdd anchors: [ARAnchor]) {
         for anchor in anchors {
-            if let meshAnchor = anchor as? ARMeshAnchor {
-                if IDFlag == false {
-                    print("didAdd")
-                    if renderer.anchorID.count < 2 {
-                        renderer.ID = meshAnchor.identifier
-                        renderer.anchorID[meshAnchor.identifier] = renderer.anchorID.count
-                        renderer.perFaceCount.append(meshAnchor.geometry.faces.count)
-                        if renderer.anchorID.count > 0 {
-                           renderer.perFaceIndex.append(renderer.perFaceIndex[renderer.anchorID.count - 1] + renderer.perFaceCount[renderer.anchorID.count - 1])
-                        }
-                    }
-                    //IDFlag = true
-                }
+            if anchor is ARMeshAnchor {
+                renderer.meshFlag = true
             }
         }
     }
-    
+
     func session(_ session: ARSession, didUpdate anchors: [ARAnchor]) {
+        var meshAnchors = [ARMeshAnchor]()
+        print("update-------------------------------------------------------------------")
         for anchor in anchors {
             if let meshAnchor = anchor as? ARMeshAnchor {
-                renderer.ID = meshAnchor.identifier
+                print(meshAnchor)
+                meshAnchors.append(meshAnchor)
+                //renderer.ID = meshAnchor.identifier
+
+                //let n = renderer.anchorID[meshAnchor.identifier]!
+                //renderer.meshAnchorsArray[n] = meshAnchor
             }
         }
+        renderer.meshAnchors = meshAnchors
+        print("--------------------------------------------------------------------------")
     }
                     
 
